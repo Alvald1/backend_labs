@@ -1,7 +1,7 @@
 import argparse
 import json
 import socket
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from itertools import count
 
 PHRASES = {
@@ -44,7 +44,7 @@ def parse_head(head):
     length = headers.get("content-length", "0")
     if not length.isascii() or not length.isdecimal():
         raise ValueError("Invalid Content-Length")
-    return method, path, int(length)
+    return method, path, headers, int(length)
 
 
 def route(method, path, body, products, ids):
@@ -80,48 +80,72 @@ def route(method, path, body, products, ids):
     return 204, None, {}
 
 
-def handle_connection(conn, address, products, ids):
-    method, path = "-", "-"
+class RequestParser:
+    """Один разбор HTTP для сокетов, потоков и asyncio."""
+
+    def __init__(self):
+        self.buffer = b""
+        self.body = b""
+        self.method = "-"
+        self.path = "-"
+        self.headers = None
+        self.length = 0
+        self.expect_continue = False
+
+    def feed(self, data):
+        self.buffer += data
+        if self.headers is None:
+            if b"\r\n\r\n" not in self.buffer:
+                return False
+            head, _, self.buffer = self.buffer.partition(b"\r\n\r\n")
+            self.method, self.path, self.headers, self.length = parse_head(head)
+            self.expect_continue = self.headers.get("expect", "").lower() == "100-continue"
+        if len(self.buffer) < self.length:
+            return False
+        self.body = self.buffer[: self.length]
+        return True
+
+
+def handle_connection(conn, address, products, ids, lock=None):
+    request = RequestParser()
     recv_count = 0
     try:
-        raw = b""
-        while b"\r\n\r\n" not in raw:
+        while True:
             chunk = conn.recv(4096)
             recv_count += 1
             if not chunk:
-                if not raw:
+                if request.headers is None and not request.buffer:
                     return
-                raise ValueError("Incomplete headers")
-            raw += chunk
-        head, _, body = raw.partition(b"\r\n\r\n")
-        method, path, length = parse_head(head)
-        body = body[:length]
-        while len(body) < length:
-            chunk = conn.recv(min(4096, length - len(body)))
-            recv_count += 1
-            if not chunk:
-                raise ValueError("Incomplete body")
-            body += chunk
-        status, data, headers = route(method, path, body, products, ids)
-        response = make_response(status, data, headers)
+                raise ValueError("Incomplete request")
+            complete = request.feed(chunk)
+            if request.expect_continue:
+                conn.sendall(b"HTTP/1.1 100 Continue\r\n\r\n")
+                request.expect_continue = False
+            if complete:
+                break
+        with lock if lock is not None else nullcontext():
+            status, data, headers = route(request.method, request.path, request.body, products, ids)
+            response = make_response(status, data, headers)
     except (ValueError, RecursionError):
         status = 400
         response = make_response(status, {"error": "Bad request"})
     except OSError:
         return
-    # Клиент мог отключиться до отправки ответа.
     with suppress(OSError):
         conn.sendall(response)
-    print(f"{address[0]}:{address[1]} {method} {path} {status} recv={recv_count}", flush=True)
+    print(
+        f"{address[0]}:{address[1]} {request.method} {request.path} {status} recv={recv_count}",
+        flush=True,
+    )
 
 
-def serve(host, port):
+def serve(host, port, backlog=128):
     products = {}
     ids = count(1)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((host, port))
-        server.listen()
+        server.listen(backlog)
         print(f"Listening on {host}:{port}", flush=True)
         while True:
             conn, address = server.accept()
@@ -130,12 +154,17 @@ def serve(host, port):
                 handle_connection(conn, address, products, ids)
 
 
-if __name__ == "__main__":
+def arguments():
     parser = argparse.ArgumentParser(description="HTTP-сервер каталога товаров")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    args = parser.parse_args()
+    parser.add_argument("--backlog", type=int, default=128)
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = arguments()
     try:
-        serve(args.host, args.port)
+        serve(args.host, args.port, args.backlog)
     except KeyboardInterrupt:
         print("\nСервер остановлен")
