@@ -1,0 +1,20 @@
+[project]
+name = "product-catalog-api"
+version = "0.2.0"
+description = "Учебный API каталога товаров"
+requires-python = ">=3.13"
+dependencies = ["fastapi>=0.115,<0.116", "pydantic>=2.11,<3", "uvicorn>=0.34,<1"]
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8,<9", "ruff>=0.16.7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
