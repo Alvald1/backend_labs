@@ -859,14 +859,9 @@ content-type: application/json
 ## Проверка кода
 
 ```text
-uv run pytest -q
-114 passed
-
-uv run ruff check app tests
+uv run ruff check app
 All checks passed!
 
-uv run ruff format --check app tests
-18 files already formatted
+uv run ruff format --check app
+16 files already formatted
 ```
-
-pytest также выводит одно предупреждение зависимости Starlette об устаревающем имени BlockingPortal в AnyIO; оно не связано с обработчиками приложения.

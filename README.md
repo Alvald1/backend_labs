@@ -169,12 +169,10 @@ uv run uvicorn app.vuln:app --host 127.0.0.1 --port 8001
 - `app/models.py` — внутренняя модель товара и заглушка пользователя.
 - `app/storage.py` — три словаря.
 - `app/errors.py` — единые ошибки.
-- `tests/` — HTTP-проверки контракта.
 
 ```bash
-uv run pytest -q
-uv run ruff check app tests
-uv run ruff format --check app tests
+uv run ruff check app
+uv run ruff format --check app
 ```
 
 Рабочая ветка — `lab-02`. Для разработки используется GitHub `origin`.
