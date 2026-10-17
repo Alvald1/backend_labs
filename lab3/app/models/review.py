@@ -16,7 +16,7 @@ class Review(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     user_id: Mapped[UUID]
-    product_id: Mapped[UUID] = mapped_column(ForeignKey("products.id"))
+    product_id: Mapped[UUID] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     rating: Mapped[int]
     text: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(

@@ -34,5 +34,5 @@ class Product(Base):
     )
     category: Mapped["Category"] = relationship(back_populates="products")
     reviews: Mapped[list["Review"]] = relationship(
-        back_populates="product", cascade="all, delete-orphan", passive_deletes=False
+        back_populates="product", cascade="all, delete-orphan", passive_deletes=True
     )
