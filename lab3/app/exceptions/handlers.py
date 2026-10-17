@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.schemas.error import ErrorBody, ErrorDetail, ErrorResponse
@@ -39,3 +40,11 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException):
         details=getattr(exc, "details", []),
         headers=exc.headers,
     )
+
+
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    if getattr(exc.orig, "sqlstate", None) == "23503":
+        return error_response(
+            409, "conflict", "Операция запрещена: объект связан с другими записями"
+        )
+    return error_response(500, "internal_error", "Ошибка сохранения данных")
